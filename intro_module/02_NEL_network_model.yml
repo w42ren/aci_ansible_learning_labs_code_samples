@@ -1,0 +1,96 @@
+---
+# COM615 — NEL-inspired logical ACI network model
+# Illustrative subnet plan only. Confirm no IP overlaps in your environment.
+# Creates four bridge domains within an EXISTING tenant and one shared VRF.
+# This does not connect endpoints or configure ACI EPG contracts.
+
+- name: BUILD SIMPLIFIED NEL TENANT NETWORK
+  hosts: apic
+  connection: local
+  gather_facts: false
+
+  vars:
+    ansible_python_interpreter: "{{ ansible_playbook_python }}"
+    nel_bridge_domains:
+      - bd: NEL-Office-BD
+        gateway: 10.10.110.1
+        mask: 24
+        description: Office workstations and business users
+      - bd: NEL-Engineering-BD
+        gateway: 10.10.120.1
+        mask: 24
+        description: Engineering workstations and IoT collection systems
+      - bd: NEL-Manufacturing-BD
+        gateway: 10.10.130.1
+        mask: 24
+        description: Manufacturing and industrial systems
+      - bd: NEL-Servers-BD
+        gateway: 10.10.140.1
+        mask: 24
+        description: Application and infrastructure servers
+
+  vars_prompt:
+    - name: tenant
+      prompt: "Enter the name of the existing NEL lab tenant"
+      private: false
+    - name: vrf
+      prompt: "Enter the existing VRF name"
+      default: prod_vrf
+      private: false
+
+  tasks:
+    - name: ENSURE SHARED TENANT VRF EXISTS
+      cisco.aci.aci_vrf:
+        host: "{{ inventory_hostname }}"
+        username: "{{ username }}"
+        password: "{{ password }}"
+        validate_certs: false  # Lab only; use trusted TLS certificates in production
+        tenant: "{{ tenant }}"
+        vrf: "{{ vrf }}"
+        description: Shared NEL lab routing context
+        state: present
+
+    - name: ENSURE NEL BRIDGE DOMAINS EXIST
+      cisco.aci.aci_bd:
+        host: "{{ inventory_hostname }}"
+        username: "{{ username }}"
+        password: "{{ password }}"
+        validate_certs: false
+        tenant: "{{ tenant }}"
+        vrf: "{{ vrf }}"
+        bd: "{{ item.bd }}"
+        description: "{{ item.description }}"
+        state: present
+      loop: "{{ nel_bridge_domains }}"
+      loop_control:
+        label: "{{ item.bd }}"
+
+    - name: ENSURE NEL BRIDGE DOMAIN SUBNETS EXIST
+      cisco.aci.aci_bd_subnet:
+        host: "{{ inventory_hostname }}"
+        username: "{{ username }}"
+        password: "{{ password }}"
+        validate_certs: false
+        tenant: "{{ tenant }}"
+        bd: "{{ item.bd }}"
+        gateway: "{{ item.gateway }}"
+        mask: "{{ item.mask }}"
+        description: "{{ item.description }}"
+        state: present
+      loop: "{{ nel_bridge_domains }}"
+      loop_control:
+        label: "{{ item.bd }} - {{ item.gateway }}/{{ item.mask }}"
+
+    - name: QUERY ALL BRIDGE DOMAINS IN THE TENANT
+      cisco.aci.aci_bd:
+        host: "{{ inventory_hostname }}"
+        username: "{{ username }}"
+        password: "{{ password }}"
+        validate_certs: false
+        tenant: "{{ tenant }}"
+        state: query
+      register: bd_query
+
+    - name: DISPLAY APIC BRIDGE DOMAIN QUERY RESULTS
+      ansible.builtin.debug:
+        var: bd_query.current

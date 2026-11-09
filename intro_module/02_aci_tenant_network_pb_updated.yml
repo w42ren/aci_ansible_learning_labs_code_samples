@@ -1,0 +1,54 @@
+---
+- name: ENSURE ACI TENANT NETWORK CONFIGURATION EXISTS
+  hosts: apic
+  connection: local
+  gather_facts: false
+
+  vars:
+    ansible_python_interpreter: "{{ ansible_playbook_python }}"
+
+  vars_prompt:
+    - name: "tenant"
+      prompt: "What is the name of your existing Tenant?"
+      private: false
+    - name: "vrf"
+      prompt: "What would you like to name your VRF?"
+      default: "prod_vrf"
+      private: false
+
+  tasks:
+    - name: ENSURE TENANT VRF EXISTS
+      cisco.aci.aci_vrf:
+        host: "{{ inventory_hostname }}"
+        username: "{{ username }}"
+        password: "{{ password }}"
+        state: "present"
+        validate_certs: false
+        tenant: "{{ tenant }}"
+        vrf: "{{ vrf }}"
+        description: "VRF Created Using Ansible"
+
+    - name: ENSURE TENANT BRIDGE DOMAIN EXISTS
+      cisco.aci.aci_bd:
+        host: "{{ inventory_hostname }}"
+        username: "{{ username }}"
+        password: "{{ password }}"
+        state: "present"
+        validate_certs: false
+        tenant: "{{ tenant }}"
+        bd: "{{ bd | default('prod_bd') }}"
+        vrf: "{{ vrf }}"
+        description: "BD Created Using Ansible"
+
+    - name: ENSURE BRIDGE DOMAIN SUBNET EXISTS
+      cisco.aci.aci_bd_subnet:
+        host: "{{ inventory_hostname }}"
+        username: "{{ username }}"
+        password: "{{ password }}"
+        state: "present"
+        validate_certs: false
+        tenant: "{{ tenant }}"
+        bd: "{{ bd | default('prod_bd') }}"
+        gateway: "10.10.101.1"
+        mask: 24
+        description: "Subnet Created Using Ansible"

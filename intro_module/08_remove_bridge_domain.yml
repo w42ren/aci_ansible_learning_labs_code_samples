@@ -1,0 +1,10 @@
+
+- name: REMOVE ORIGINAL BRIDGE DOMAIN
+  cisco.aci.aci_bd:
+    host: "{{ inventory_hostname }}"
+    username: "{{ username }}"
+    password: "{{ password }}"
+    validate_certs: false
+    tenant: "{{ tenant }}"
+    bd: "prod_bd"
+    state: absent

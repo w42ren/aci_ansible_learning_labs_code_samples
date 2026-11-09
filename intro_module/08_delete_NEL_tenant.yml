@@ -1,0 +1,70 @@
+---
+# COM615 / Cisco ACI lab cleanup
+# WARNING: This removes the ENTIRE tenant and all objects inside it.
+# It is intended only for a tenant that you own in a lab/sandbox.
+# If your NEL lab tenant has another name, change target_tenant below
+# and enter the matching confirmation phrase when prompted.
+
+- name: DELETE NEL LAB TENANT AND ITS CONTENTS
+  hosts: apic
+  connection: local
+  gather_facts: false
+
+  vars:
+    ansible_python_interpreter: "{{ ansible_playbook_python }}"
+    target_tenant: "NEL"
+
+  vars_prompt:
+    - name: deletion_confirmation
+      prompt: "DANGER - This will delete the entire NEL tenant. Type DELETE NEL to confirm"
+      private: false
+
+  tasks:
+    - name: REQUIRE EXPLICIT CONFIRMATION
+      ansible.builtin.assert:
+        that:
+          - deletion_confirmation == 'DELETE ' ~ target_tenant
+        fail_msg: "Deletion cancelled: confirmation did not match the tenant name."
+        success_msg: "Confirmed deletion request for tenant {{ target_tenant }}."
+
+    - name: CHECK THAT THE TARGET TENANT EXISTS
+      cisco.aci.aci_tenant:
+        host: "{{ inventory_hostname }}"
+        username: "{{ username }}"
+        password: "{{ password }}"
+        validate_certs: false  # Lab / self-signed APIC certificate only
+        tenant: "{{ target_tenant }}"
+        state: query
+      register: tenant_before
+
+    - name: STOP IF TARGET TENANT IS NOT FOUND
+      ansible.builtin.assert:
+        that:
+          - (tenant_before.current | default([]) | length) > 0
+        fail_msg: "Tenant {{ target_tenant }} was not found. Nothing was deleted."
+
+    - name: DELETE THE ENTIRE TARGET TENANT
+      cisco.aci.aci_tenant:
+        host: "{{ inventory_hostname }}"
+        username: "{{ username }}"
+        password: "{{ password }}"
+        validate_certs: false
+        tenant: "{{ target_tenant }}"
+        state: absent
+
+    - name: VERIFY THE TENANT HAS BEEN REMOVED
+      cisco.aci.aci_tenant:
+        host: "{{ inventory_hostname }}"
+        username: "{{ username }}"
+        password: "{{ password }}"
+        validate_certs: false
+        tenant: "{{ target_tenant }}"
+        state: query
+      register: tenant_after
+
+    - name: CONFIRM NO TENANT REMAINS
+      ansible.builtin.assert:
+        that:
+          - (tenant_after.current | default([]) | length) == 0
+        fail_msg: "Tenant {{ target_tenant }} still appears in APIC. Check deletion status."
+        success_msg: "Tenant {{ target_tenant }} and its contained configuration were removed."
